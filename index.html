@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Tap Recorder</title>
+<style>
+:root{--bg:#fff;--fg:#111;--btn:#2563eb;--muted:#666}
+@media (prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--btn:#3b82f6;--muted:#aaa}}
+body{background:var(--bg);color:var(--fg);font:16px -apple-system,system-ui,sans-serif;margin:0;padding:16px;text-align:center;-webkit-user-select:none;user-select:none}
+#pad{margin:20px auto;width:100%;max-width:340px;height:220px;border-radius:18px;background:var(--btn);color:#fff;font-size:26px;font-weight:600;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+#n{font-size:40px;font-weight:700}
+button{font-size:17px;padding:12px 18px;border-radius:12px;border:0;margin:6px;background:#16a34a;color:#fff}
+#reset{background:#6b7280}
+p{color:var(--muted);font-size:14px}
+pre{text-align:left;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:30vh;overflow:auto}
+</style></head><body>
+<h2>Tap like you normally would</h2>
+<p>Tap the blue box 20 times, normal speed, like pressing a button.</p>
+<div id="pad">Tap here</div>
+<div><span id="n">0</span> / 20</div>
+<button id="copy">Copy results</button><button id="reset">Reset</button>
+<p id="msg"></p>
+<pre id="out"></pre>
+<script>
+const pad=document.getElementById('pad'),n=document.getElementById('n'),out=document.getElementById('out'),msg=document.getElementById('msg');
+let ev=[],taps=[],cur=null;const t0=performance.now();
+function rec(type,e){const now=+(performance.now()-t0).toFixed(1);
+ const src=(e.changedTouches&&e.changedTouches[0])||e;
+ const r=pad.getBoundingClientRect();
+ const row={t:now,type,x:+((src.clientX||0)-r.left).toFixed(1),y:+((src.clientY||0)-r.top).toFixed(1)};
+ if(src.radiusX!==undefined){row.rx=src.radiusX;row.ry=src.radiusY;row.force=src.force;row.touchType=src.touchType}
+ if(e.pointerType){row.pt=e.pointerType;row.w=e.width;row.h=e.height;row.pressure=e.pressure}
+ ev.push(row);return row}
+['pointerdown','pointermove','pointerup','pointercancel','touchstart','touchmove','touchend','touchcancel','mousedown','mouseup','click'].forEach(k=>
+ pad.addEventListener(k,e=>{const row=rec(k,e);
+  if(k==='touchstart'||(k==='pointerdown'&&!cur)){cur={down:row.t,x0:row.x,y0:row.y,moves:0,maxMove:0,evs:[]}}
+  if(cur){cur.evs.push(k);if(k.endsWith('move')){cur.moves++;cur.maxMove=Math.max(cur.maxMove,Math.hypot(row.x-cur.x0,row.y-cur.y0))}}
+  if(k==='click'&&cur){cur.dur=+(row.t-cur.down).toFixed(1);cur.gapFromPrev=taps.length?+(cur.down-taps[taps.length-1].down).toFixed(1):null;
+   cur.maxMove=+cur.maxMove.toFixed(2);taps.push(cur);cur=null;n.textContent=taps.length;show()}
+ },{passive:true}));
+function summary(){const d=taps.map(t=>t.dur).sort((a,b)=>a-b);const m=taps.map(t=>t.maxMove).sort((a,b)=>a-b);
+ const med=a=>a.length?a[Math.floor(a.length/2)]:null;
+ return {taps:taps.length,dur_ms:{min:d[0],median:med(d),max:d[d.length-1]},move_px:{median:med(m),max:m[m.length-1]},
+  moves_median:med(taps.map(t=>t.moves).sort((a,b)=>a-b)),order:taps[0]?taps[0].evs.join(','):null,ua:navigator.userAgent}}
+function show(){out.textContent=JSON.stringify(summary(),null,1)}
+document.getElementById('copy').onclick=async()=>{const s=JSON.stringify({summary:summary(),taps,events:ev.slice(-600)});
+ try{await navigator.clipboard.writeText(s);msg.textContent='Copied. Paste it to Claude.'}catch(e){out.textContent=s;msg.textContent='Select the text below and copy it.'}};
+document.getElementById('reset').onclick=()=>{ev=[];taps=[];cur=null;n.textContent=0;out.textContent='';msg.textContent=''};
+</script></body></html>
